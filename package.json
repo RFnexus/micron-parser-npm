@@ -1,6 +1,6 @@
 {
   "name": "micron-parser",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A JavaScript Micron (.mu) parser for rendering Micron as HTML",
   "main": "index.js",
   "type": "module",
