@@ -1,0 +1,22 @@
+{
+  "name": "micron-parser",
+  "version": "1.0.0",
+  "description": "A JavaScript Micron (.mu) parser for rendering Micron as HTML",
+  "main": "index.js",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RFnexus/micron-parser-npm.git"
+  },
+  "keywords": [
+    "micron",
+    ".mu",
+    "nomadnet parser"
+  ],
+  "author": "Zenith <zenith777777@protonmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/RFnexus/micron-parser-npm/issues"
+  },
+  "homepage": "https://github.com/RFnexus/micron-parser-npm#readme"
+}
