@@ -1,9 +1,12 @@
 {
   "name": "micron-parser",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "description": "A JavaScript Micron (.mu) parser for rendering Micron as HTML",
   "main": "index.js",
   "type": "module",
+  "dependencies": {
+    "dompurify": "*"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/RFnexus/micron-parser-npm.git"

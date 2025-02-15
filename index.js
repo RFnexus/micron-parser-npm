@@ -7,13 +7,29 @@
  * Documentation for the Micron markdown format can be found here:
  * https://raw.githubusercontent.com/markqvist/NomadNet/refs/heads/master/nomadnet/ui/textui/Guide.py
  */
+
+import DOMPurify from 'dompurify';
+
 export default class MicronParser {
 
-    constructor(darkTheme = true) {
+    constructor(darkTheme = true, enableForceMonospace = true) {
         this.darkTheme = darkTheme;
+        this.enableForceMonospace = enableForceMonospace;
         this.DEFAULT_FG_DARK = "ddd";
         this.DEFAULT_FG_LIGHT = "222";
         this.DEFAULT_BG = "default";
+
+        if (this.enableForceMonospace) {
+            this.injectMonospaceStyles();
+        }
+
+        try {
+            if (typeof DOMPurify === 'undefined') {
+                console.warn('DOMPurify is not installed. Include it above micron-parser.js or run npm install dompurify');
+            }
+        } catch (error) {
+            console.warn('DOMPurify is not installed. Include it above micron-parser.js or run npm install dompurify');
+        }
 
         this.SELECTED_STYLES = null;
 
@@ -36,6 +52,34 @@ export default class MicronParser {
         } else {
             this.SELECTED_STYLES = this.STYLES_LIGHT;
         }
+
+    }
+
+    injectMonospaceStyles() {
+        if (document.getElementById('micron-monospace-styles')) {
+            return;
+        }
+
+        const styleEl = document.createElement('style');
+        styleEl.id = 'micron-monospace-styles';
+
+        styleEl.textContent = `
+            .Mu-nl {
+                cursor: pointer;
+            }
+            .Mu-mnt {
+                display: inline-block;
+                width: 0.6em;
+                text-align: center;
+                white-space: pre;
+                text-decoration: inherit;
+            }
+            .Mu-mws {
+                text-decoration: inherit;
+                display: inline-block;
+            }
+        `;
+        document.head.appendChild(styleEl);
     }
 
     static formatNomadnetworkUrl(url) {
@@ -76,7 +120,13 @@ export default class MicronParser {
             }
         }
 
-        return html;
+
+       try {
+        return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+       } catch (error) {
+            console.warn('DOMPurify is not installed. Include it above micron-parser.js or run npm install dompurify ', error);
+            return `<p style="color: red;"> ⚠ DOMPurify is not installed. Include it above micron-parser.js or run npm install dompurify </p>`;
+       }
     }
 
     convertMicronToFragment(markup) {
@@ -102,9 +152,11 @@ export default class MicronParser {
         const lines = markup.split("\n");
 
         for (let line of lines) {
+            line = DOMPurify.sanitize(line, { USE_PROFILES: { html: true } });
             const lineOutput = this.parseLine(line, state);
             if (lineOutput && lineOutput.length > 0) {
                 for (let el of lineOutput) {
+
                     fragment.appendChild(el);
                 }
             } else if (lineOutput && lineOutput.length === 0) {
@@ -224,22 +276,64 @@ export default class MicronParser {
             }
 
             let outputParts = this.makeOutput(state, line);
+            // outputParts can contain text (tuple) and special objects (fields/checkbox)
             if (outputParts) {
-                // outputParts can contain text (tuple) and special objects (fields/checkbox)
-                // construct a single line container
+
+                // create parent div container to apply proper section indent
                 let container = document.createElement("div");
                 this.applyAlignment(container, state);
                 this.applySectionIndent(container, state);
+
                 this.appendOutput(container, outputParts, state);
+
+                // if theres a background color, wrap with outer div
+                if (state.bg_color !== this.DEFAULT_BG) {
+                    const outerDiv = document.createElement("div");
+                    outerDiv.style.backgroundColor = this.colorToCss(state.bg_color);
+                    outerDiv.style.width = "100%";
+                    outerDiv.style.display = "block";
+                    outerDiv.style.padding = "0 2px";
+                    outerDiv.appendChild(container);
+                    return [outerDiv];
+                }
                 return [container];
             } else {
-                // Just empty line
-                return [document.createElement("br")];
-            }
+                // empty line but maintain background color if set
+                const br = document.createElement("br");
+                if (state.bg_color !== this.DEFAULT_BG) {
+                    const outerDiv = document.createElement("div");
+                    outerDiv.style.backgroundColor = this.colorToCss(state.bg_color);
+                    outerDiv.style.width = "100%";
+                    outerDiv.style.height = "1.2em";
+                    outerDiv.style.display = "block";
 
+                    const innerDiv = document.createElement("div");
+                    this.applySectionIndent(innerDiv, state);
+                    innerDiv.appendChild(br);
+                    outerDiv.appendChild(innerDiv);
+
+                    return [outerDiv];
+                }
+                return [br];
+            }
         } else {
-            // Empty line
-            return [document.createElement("br")];
+            // Empty line handling for just newline background color
+            const br = document.createElement("br");
+            if (state.bg_color !== this.DEFAULT_BG) {
+                const outerDiv = document.createElement("div");
+                outerDiv.style.backgroundColor = this.colorToCss(state.bg_color);
+                outerDiv.style.width = "100%";
+                outerDiv.style.height = "1.2em";
+                outerDiv.style.display = "block";
+
+                const innerDiv = document.createElement("div");
+                this.applySectionIndent(innerDiv, state);
+                innerDiv.appendChild(br);
+                outerDiv.appendChild(innerDiv);
+
+                return [outerDiv];
+            }
+            return [br];
         }
     }
 
@@ -251,7 +345,7 @@ export default class MicronParser {
     applySectionIndent(el, state) {
         // indent by state.depth
         let indent = (state.depth - 1) * 2;
-        if (indent > 0) {
+        if (indent > 0 ) {
             // Indent according to forceMonospace() character width
             el.style.marginLeft = (indent * 0.6) + "em";
         }
@@ -281,8 +375,12 @@ export default class MicronParser {
         let currentSpan = null;
         let currentStyle = null;
 
-        const flushSpan = () => {
+         const flushSpan = () => {
             if (currentSpan) {
+                if (currentStyle && currentStyle.bg !== this.DEFAULT_BG) {
+                    currentSpan.style.display = "inline-block";
+                    currentSpan.style.padding = "0 2px";
+                }
                 container.appendChild(currentSpan);
                 currentSpan = null;
                 currentStyle = null;
@@ -385,12 +483,14 @@ export default class MicronParser {
                             directURL += directURL.includes('`') ? `|${queryString}` : `\`${queryString}`;
                         }
 
-                        a.setAttribute("onclick", `event.preventDefault(); onNodePageUrlClick('${directURL}', '${fieldStr}', false, false)`);
+                        a.setAttribute("data-destination", `${directURL}`);
+                        a.setAttribute("data-fields", `${fieldStr}`);
                     } else {
                         // no fields or request variables, just handle the direct URL
-                        a.setAttribute("onclick", `event.preventDefault(); onNodePageUrlClick('${directURL}', null, false, false)`);
+                        a.setAttribute("data-destination", `${directURL}`);
                     }
-
+                    a.classList.add('Mu-nl');
+                    a.setAttribute('data-action', "openNode");
                     a.innerHTML = p.label;
                     this.applyStyleToElement(a, this.styleFromState(p.style));
                     container.appendChild(a);
@@ -414,7 +514,7 @@ export default class MicronParser {
         return stateStyle;
     }
 
-    applyStyleToElement(el, style) {
+applyStyleToElement(el, style) {
         if (!style) return;
         // convert style fg/bg to colors
         let fgColor = this.colorToCss(style.fg);
@@ -425,6 +525,8 @@ export default class MicronParser {
         }
         if (bgColor && bgColor !== "default") {
             el.style.backgroundColor = bgColor;
+            el.style.padding = "0 2px";
+            el.style.display = "inline-block";
         }
 
         if (style.bold) {
@@ -479,7 +581,11 @@ export default class MicronParser {
 
         const flushPart = () => {
             if (part.length > 0) {
-                output.push([this.stateToStyle(state), this.splitAtSpaces(part)]);
+                if(this.enableForceMonospace) {
+                    output.push([this.stateToStyle(state), this.splitAtSpaces(part)]);
+                } else {
+                    output.push([this.stateToStyle(state), part]);
+                }
                 part = "";
             }
         };
@@ -518,18 +624,19 @@ export default class MicronParser {
                         // reset fg
                         state.fg_color = this.SELECTED_STYLES.plain.fg;
                         break;
-
                     case 'B':
                         // next 3 chars => bg color
                         if (line.length >= i + 4) {
                             let color = line.substr(i + 1, 3);
                             state.bg_color = color;
                             skip = 3;
+                            flushPart(); // flush current part when background color changes
                         }
                         break;
-                    case 'b':
+                     case 'b':
                         // reset bg
                         state.bg_color = this.DEFAULT_BG;
+                        flushPart(); // flush to allow for ` tags on same line
                         break;
                     case '`':
                         state.formatting.bold = false;
@@ -628,10 +735,14 @@ export default class MicronParser {
         }
         // end of line
         if (part.length > 0) {
-            output.push([this.stateToStyle(state), this.splitAtSpaces(part)]);
+            if(this.enableForceMonospace) {
+                output.push([this.stateToStyle(state), this.splitAtSpaces(part)]);
+            } else {
+                output.push([this.stateToStyle(state), part]);
+            }
         }
 
-        return (output.length > 0) ? output : null;
+        return output;
     }
 
     parseField(line, startIndex, state) {
@@ -746,7 +857,9 @@ export default class MicronParser {
         link_url = MicronParser.formatNomadnetworkUrl(link_url);
 
         // Apply forceMonospace
-        link_label = this.splitAtSpaces(link_label);
+        if(this.enableForceMonospace) {
+            link_label = this.splitAtSpaces(link_label);
+        }
 
         let style = this.stateToStyle(state);
         let obj = {
@@ -765,7 +878,7 @@ export default class MicronParser {
         let out = "";
         let wordArr = line.split(" ");
         for (let i = 0; i < wordArr.length; i++) {
-            out += "<span class='mws'>" + this.forceMonospace(wordArr[i]) + "</span>";
+            out += "<span class='Mu-mws'>" + this.forceMonospace(wordArr[i]) + "</span>";
             if (i < wordArr.length - 1) {
                 out += " ";
             }
@@ -777,9 +890,10 @@ export default class MicronParser {
         let out = "";
         let charArr = line.split("");
         for (let char of charArr) {
-            out += "<span class='mnt'>" + char + "</span>";
+            out += "<span class='Mu-mnt'>" + char + "</span>";
         }
         return out;
     }
 }
+
 
