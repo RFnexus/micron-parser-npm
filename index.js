@@ -252,6 +252,10 @@ export default class MicronParser {
                     // if the line is  just "-", do a normal <hr>
                     if (line.length === 1) {
                         const hr = document.createElement("hr");
+                        hr.style.all = "revert";
+                        hr.style.borderColor = this.colorToCss(state.fg_color);
+                        hr.style.margin = "0.5em 0.5em 0.5em 0.5em";
+                        hr.style.boxShadow = "0 0 0 0.5em " + this.colorToCss(state.bg_color);
                         this.applySectionIndent(hr, state);
                         return [hr];
                     } else {
@@ -262,11 +266,11 @@ export default class MicronParser {
                         const div = document.createElement("div");
                         div.style.whiteSpace = "pre";   // needs to not wrap and ignore container formatting
                         div.textContent = repeated;
-                        div.style.display = "inline-block";
                         div.style.width = "100%";
                         div.style.whiteSpace = "nowrap";
                         div.style.overflow = "hidden";
-                        div.style.margin = "0.5em 0";
+                        div.style.color = this.colorToCss(state.fg_color);
+                        div.style.backgroundColor = this.colorToCss(state.bg_color);
                         this.applySectionIndent(div, state);
 
                         return [div];
@@ -888,12 +892,10 @@ applyStyleToElement(el, style) {
 
     forceMonospace(line) {
         let out = "";
-        let charArr = line.split("");
+        let charArr = [...new Intl.Segmenter().segment(line)].map(x => x.segment);
         for (let char of charArr) {
             out += "<span class='Mu-mnt'>" + char + "</span>";
         }
         return out;
     }
 }
-
-
